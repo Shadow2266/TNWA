@@ -4,14 +4,13 @@ import { ClipboardCheck, Heart, User, ArrowRight, ArrowLeft, AlertTriangle, Chec
 // --- 設定後端 API 網址 ---
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwSW54OZlDBTj2LiF0i03s3laPU0dWvcdLicQWtKHeDw15TbOCRrUcWc6V2-HOnP7S0/exec";
 
-// --- 靜態資料 (移至元件外部以確保渲染穩定性) ---
+// --- 靜態資料 ---
 
 const satisfactionOptions = [
   { value: 5, label: "非常滿意" }, { value: 4, label: "滿意" }, { value: 3, label: "普通" },
   { value: 2, label: "不滿意" }, { value: 1, label: "非常不滿意" }
 ];
 
-// 新增：包含 "0不清楚" 的選項，用於 2-1 ~ 2-4
 const satisfactionOptionsWithUnknown = [
   { value: 5, label: "非常滿意" }, { value: 4, label: "滿意" }, { value: 3, label: "普通" },
   { value: 2, label: "不滿意" }, { value: 1, label: "非常不滿意" }, { value: 0, label: "不清楚" }
@@ -22,15 +21,14 @@ const frequencyOptions = [
   { value: 4, label: "經常" }, { value: 5, label: "總是" }
 ];
 
-// 修改後的步驟配置：移除代號，新增最後的 Email 頁面
 const stepsConfig = [
-  { id: 'step-consent', title: '填寫說明與同意書', type: 'consent' },
-  { id: 'step-1', title: '第一部分：護理職場滿意程度', type: 'questions' },
-  { id: 'step-2', title: '第一部分(續)：彈性護理人力資源管理', type: 'questions' },
-  { id: 'step-3', title: '第二部分：工作滿意度', type: 'questions' },
-  { id: 'step-4', title: '第二部分(續)：留任意願', type: 'questions' },
-  { id: 'step-5', title: '基本資料', type: 'basic' },
-  { id: 'step-finish', title: '領取回饋與完成', type: 'finish' }
+  { id: 'step-consent', title: '填寫說明與同意書', type: 'consent' }, // 0
+  { id: 'step-1', title: '第一部分：護理職場滿意程度', type: 'questions' }, // 1
+  { id: 'step-2', title: '第一部分(續)：彈性護理人力資源管理', type: 'questions' }, // 2
+  { id: 'step-3', title: '第二部分：工作滿意度', type: 'questions' }, // 3
+  { id: 'step-4', title: '第二部分(續)：留任意願', type: 'questions' }, // 4
+  { id: 'step-5', title: '基本資料', type: 'basic' }, // 5
+  { id: 'step-finish', title: '領取回饋與完成', type: 'finish' } // 6
 ];
 
 const workplaceSections = [
@@ -273,6 +271,7 @@ const QuestionItem = React.memo(({
 const SurveyForm = () => {
   const [currentStep, setCurrentStep] = useState(0); 
   const [consent, setConsent] = useState({ read: false, agree: false, understand: false });
+  // Removed researchCode
   const [answers, setAnswers] = useState({});
   const [reasons, setReasons] = useState({});
   const [basicData, setBasicData] = useState({
@@ -284,7 +283,7 @@ const SurveyForm = () => {
   const [showAbandonModal, setShowAbandonModal] = useState(false);
   const [isAbandoned, setIsAbandoned] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // 新增提交中狀態
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- 邏輯處理 ---
 
@@ -321,6 +320,9 @@ const SurveyForm = () => {
       return consent.read && consent.agree && consent.understand ? null : 'step-consent';
     }
     
+    // Step indices have shifted because researchCode is gone
+    // 0: Consent, 1: Workplace, 2: Flexible, 3: Job, 4: Retention, 5: Basic, 6: Email
+
     let currentIds = [];
     if (currentStep === 1) {
       workplaceSections.forEach(sec => sec.questions.forEach(q => currentIds.push(q.id)));
@@ -421,7 +423,6 @@ const SurveyForm = () => {
     if (!errorId) {
       setIsSubmitting(true);
       
-      // 準備資料 payload
       const formData = {
         answers,
         reasons,
@@ -431,7 +432,6 @@ const SurveyForm = () => {
       };
 
       try {
-        // 使用 no-cors 模式發送資料到 Google Apps Script
         await fetch(GOOGLE_SCRIPT_URL, {
           method: 'POST',
           mode: 'no-cors',
@@ -441,7 +441,6 @@ const SurveyForm = () => {
           body: JSON.stringify(formData)
         });
         
-        // 成功後顯示感謝畫面
         setIsSubmitted(true);
         window.scrollTo(0, 0);
 
@@ -496,7 +495,6 @@ const SurveyForm = () => {
             </h2>
             
             <div className="prose prose-emerald text-gray-700 leading-relaxed mb-8 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-              {/* ... 省略重複文字內容 ... */}
               <p className="font-bold text-lg">親愛的護理同仁您好：</p>
               <p>感謝您在繁忙的工作中撥空協助本次研究。本問卷旨在了解全國各層級醫院護理師的<span className="font-bold">職場現況、工作滿意度與組織文化氛圍</span>，以做為後續提升護理職場環境與政策倡議的重要參考。</p>
               
@@ -857,6 +855,7 @@ const SurveyForm = () => {
               <p className="text-xs opacity-80">Step {currentStep} / {stepsConfig.length - 1}</p>
             </div>
           </div>
+          {/* Removed researchCode display */}
         </div>
         {/* Progress Bar */}
         <div className="h-2 bg-emerald-900/30 w-full">
