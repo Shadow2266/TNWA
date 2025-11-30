@@ -1,985 +1,969 @@
-import React, { useState, useCallback } from 'react';
-import { ClipboardCheck, Heart, User, ArrowRight, ArrowLeft, AlertTriangle, CheckCircle, Lock, FileText, CheckSquare, XCircle, Sparkles, Coffee, HelpCircle, RefreshCw, MousePointerClick, Mail, Phone } from 'lucide-react';
-
-// --- 設定後端 API 網址 ---
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwSW54OZlDBTj2LiF0i03s3laPU0dWvcdLicQWtKHeDw15TbOCRrUcWc6V2-HOnP7S0/exec";
-
-// --- 靜態資料 ---
-
-const satisfactionOptions = [
-  { value: 5, label: "非常滿意" }, { value: 4, label: "滿意" }, { value: 3, label: "普通" },
-  { value: 2, label: "不滿意" }, { value: 1, label: "非常不滿意" }
-];
-
-const satisfactionOptionsWithUnknown = [
-  { value: 5, label: "非常滿意" }, { value: 4, label: "滿意" }, { value: 3, label: "普通" },
-  { value: 2, label: "不滿意" }, { value: 1, label: "非常不滿意" }, { value: 0, label: "不清楚" }
-];
-
-const frequencyOptions = [
-  { value: 1, label: "從未" }, { value: 2, label: "很少" }, { value: 3, label: "有時" },
-  { value: 4, label: "經常" }, { value: 5, label: "總是" }
-];
-
-const stepsConfig = [
-  { id: 'step-consent', title: '填寫說明與同意書', type: 'consent' }, // 0
-  { id: 'step-1', title: '第一部分：護理職場滿意程度', type: 'questions' }, // 1
-  { id: 'step-2', title: '第一部分(續)：彈性護理人力資源管理', type: 'questions' }, // 2
-  { id: 'step-3', title: '第二部分：工作滿意度', type: 'questions' }, // 3
-  { id: 'step-4', title: '第二部分(續)：留任意願', type: 'questions' }, // 4
-  { id: 'step-5', title: '基本資料', type: 'basic' }, // 5
-  { id: 'step-finish', title: '領取回饋與完成', type: 'finish' } // 6
-];
-
-const workplaceSections = [
-  {
-    title: "1. 安全執業環境",
-    questions: [
-      { id: "q1-1", text: "具安全執業環境設置標準及維護標準，並落實執行及持續改善。" },
-      { id: "q1-2", text: "有足夠的經費確保安全執業環境，並落實執行。" },
-      { id: "q1-3", text: "具員工健康檢查制度，並落實後續追蹤及管理。" },
-      { id: "q1-4", text: "具職業傷病預防、處置及通報機制，並落實檢討改善。" },
-      { id: "q1-5", text: "具職業災害補償機制，並落實執行。" },
-      { id: "q1-6", text: "落實感控動線規劃及風險區域管制。" },
-      { id: "q1-7", text: "具降低生物性危害(如：體液、血液與傳染性醫療廢棄物等)的防護設備及措施。" },
-      { id: "q1-8", text: "具降低物理性危害(如：電器、滅菌鍋、氧氣槽、輻射、溫度、噪音等)的防護設備及措施。" },
-      { id: "q1-9", text: "具降低化學性危害(如：高危藥、有機物質等)的防護設備及措施。" },
-      { id: "q1-10", text: "確實執行執業環境危害評估與改善。" },
-      { id: "q1-11", text: "具符合人因工程的基本設施(如：桌椅、工作台、工作車、燈光、空間等)。" },
-      { id: "q1-12", text: "具預防人因工程危害之設備(如：移位滑板、電動床、電動磅秤床等)。" },
-      { id: "q1-13", text: "落實人因工程危害的預防與管理。" },
-      { id: "q1-14", text: "訂有職場暴力(如：霸凌、性侵害等)與性騷擾危害防治政策及標準作業流程。" },
-      { id: "q1-15", text: "具職場暴力(如：霸凌、性侵害等)與性騷擾通報機制並協處合宜。" },
-      { id: "q1-16", text: "提供職場暴力(如：霸凌、性侵害等)與性騷擾受害員工的支援與輔導。" },
-    ]
-  },
-  {
-    title: "2. 人力素質",
-    questions: [
-      { id: "q2-1", text: "具護理師證照佔率。" },
-      { id: "q2-2", text: "具N2(含)以上佔率。" },
-      { id: "q2-3", text: "具本院臨床工作年資2年(含)以上佔率。" },
-      { id: "q2-4", text: "具碩士學位之護理長(含)以上主管佔率。" },
-    ]
-  },
-  {
-    title: "3. 工作負荷與薪資福利",
-    questions: [
-      { id: "q3-1", text: "合宜的三班護病比(一般急性病房)。" },
-      { id: "q3-2", text: "有機動護理人力調配機制。" },
-      { id: "q3-3", text: "有輔助人力，維持合理工作負荷。" },
-      { id: "q3-4", text: "具市場行情的薪資(含績效獎金)。" },
-      { id: "q3-5", text: "具市場行情的夜班費。" },
-      { id: "q3-6", text: "具護理專業進階或升等制度，並隨能力進階或升等職級調整薪資/獎金。" },
-      { id: "q3-7", text: "具多元激勵措施,定期評估激勵制度，加以改進和提供合適與即時性酬賞。" },
-      { id: "q3-8", text: "具優渥的福利方案(如：保險、傷殘、房租、教育、房貸、制服、洗衣、伙食、交通、急難救助、育嬰、托兒、托老等)。" },
-    ]
-  },
-  {
-    title: "4. 專業分工與團隊合作",
-    questions: [
-      { id: "q4-1", text: "護理部門對專業分工之決策具有影響力。" },
-      { id: "q4-2", text: "團隊專業分工明確且確實執行。" },
-      { id: "q4-3", text: "非護理專業工作由專責單位負責監督與管理。" },
-      { id: "q4-4", text: "跨領域團隊具相互尊重的文化。" },
-      { id: "q4-5", text: "跨領域團隊具良好的溝通及合作機制。" },
-      { id: "q4-6", text: "護理團隊單位內與單位間有互助合作機制。" },
-    ]
-  },
-  {
-    title: "5. 工作簡化",
-    questions: [
-      { id: "q5-1", text: "護理主管積極推動工作簡化。" },
-      { id: "q5-2", text: "護理人員落實執行工作簡化。" },
-      { id: "q5-3", text: "工作簡化有具體成效評值。" },
-      { id: "q5-4", text: "鼓勵參與工作簡化，並有獎勵措施。" },
-      { id: "q5-5", text: "工作簡化能獲得跨領域團隊的支持與協助。" },
-    ]
-  },
-  {
-    title: "6. 資訊化",
-    questions: [
-      { id: "q6-1", text: "病房具足夠的資訊科技硬體設備(如：E化護理工作車、床邊電腦等)。" },
-      { id: "q6-2", text: "具適當的病人安全維護系統。" },
-      { id: "q6-3", text: "具符合護理人員需求的臨床護理資訊系統。" },
-      { id: "q6-4", text: "具數位化學習及管理系統。" },
-      { id: "q6-5", text: "具適當之護理資訊管理功能。" },
-    ]
-  },
-  {
-    title: "7. 人才培育與專業發展",
-    questions: [
-      { id: "q7-1", text: "護理部門對人才培育有具體之方向及策略。" },
-      { id: "q7-2", text: "醫院提供充足資源，進行護理人才培育，並有具體成效。" },
-      { id: "q7-3", text: "具臨床專業能力進階制度，以及促進專業能力機制，並定期檢視與評值。" },
-      { id: "q7-4", text: "協助及激勵護理人員專業職涯規劃，並有具體成果。" },
-      { id: "q7-5", text: "展現多元化護理專業角色與功能(如：個管師、安寧共照師、資訊護理師等)。" },
-      { id: "q7-6", text: "具體呈現護理實務之專業發展與創新實例。" },
-      { id: "q7-7", text: "病人及家屬肯定護理專業的價值。" },
-      { id: "q7-8", text: "醫療團隊及院內同仁肯定護理人員專業貢獻。" },
-      { id: "q7-9", text: "護理專業發展能與國際接軌，並有具體策略。" },
-    ]
-  },
-  {
-    title: "8. 支持與關懷",
-    questions: [
-      { id: "q8-1", text: "醫院內重大會議均有護理部主管參與(如：預算、績效、獎懲、人力資源、品質管理等會議)。" },
-      { id: "q8-2", text: "重大決策採納護理部主管意見。" },
-      { id: "q8-3", text: "支持護理部門並提供所需資源。" },
-      { id: "q8-4", text: "尊重護理部門之人事決策。" },
-      { id: "q8-5", text: "定期與不定期獎勵護理人員良好的工作表現，並公開表揚。" },
-      { id: "q8-6", text: "有專責單位支持及協助護理人員處理各種困境(如：異常事件、客訴、醫療爭議等)。" },
-      { id: "q8-7", text: "護理部門之會議及政策制定有基層護理人員參與。" },
-      { id: "q8-8", text: "護理人員有多元管道表達意見，並獲得有效處理。" },
-      { id: "q8-9", text: "具有彈性的排班原則，符合多元需求。" },
-      { id: "q8-10", text: "關懷護理人員之工作和生活需求。" },
-      { id: "q8-11", text: "提供護理人員身心紓壓的支持團體或相關活動與措施。" },
-    ]
-  },
-  {
-      title: "9. 整體滿意度",
-      questions: [
-          { id: "q1-overall", text: "整體而言，您對目前護理職場環境的滿意度。" }
-      ]
-  }
-];
-
-const flexibleManpowerQuestions = [
-  { id: "fm-1", title: "職能彈性", text: "您對醫院利用職能變化，賦予人力運用的彈性（如：教育訓練、交叉訓練、工作輪調、自主性等）的滿意情形。" },
-  { id: "fm-2", title: "數量彈性", text: "您對醫院在面對照護需求變動時，能及時調整人力數量（如：浮動人力庫、工作分享制等）的滿意情形。" },
-  { id: "fm-3", title: "區隔彈性", text: "您對醫院配置核心護理人力，並適度聘用周邊人力（如：護佐）且給予合適職稱薪酬的滿意情形。" },
-  { id: "fm-4", title: "時間彈性", text: "您對醫院利用改變工作時數或時段（如：排班考量偏好、彈性排班、固定班別、部分工時）的滿意情形。" },
-  { id: "fm-5", title: "薪資彈性", text: "您對醫院採用個人化、多樣性及激勵性薪給制度（如：績效獎金、利潤分享）的滿意情形。" },
-  { id: "fm-6", title: "領導彈性", text: "您對醫院促進團隊合作、溝通、授權及營造良好氣氛的滿意情形。" },
-  { id: "fm-overall", title: "整體", text: "整體而言，您對目前彈性護理人力資源管理的滿意度。" },
-];
-
-const jobSatisfactionQuestions = [
-  "我對於機構提供的個人防護設施及配備感到", "我對於各項作業的資訊化感到", "我對於工作環境的安全性感到", "我對於機構提供醫療設備的品項及數量感到", "我對於機構提供病人的照護模式感到",
-  "我對於機構支持護理人員進修感到", "我對於機構提供的專業訓練感到", "我對於服務機構的退休制度感到", "我對於職位的升遷機會感到", "我對於現有的薪資報酬感到",
-  "我對於能自我掌握工作的狀況感到", "我對於自己處理危機的能力感到", "我對於工作的專業自主感到", "我對於自己有參與各項重要決策的機會感到", "我對於自己的工作能力能獲得同儕的認同與肯定感到",
-  "我對於自己的工作能力能獲得主管的認同與肯定感到", "我對於能從工作上獲得成就感感到", "我對於在工作上能得到學習的機會感到", "我對於與其他醫事人員的互動情形感到", "我對於與醫師共同合作情形感到",
-  "我對於與護理人員共同合作情形感到", "我對於與行政人員的互動情形感到", "我對於我的工作受到跨團隊成員的相互尊重感到", "我對於與護理同儕的互動情形感到", "我對於直屬護理主管的支持與關懷感到",
-  "我對於直屬護理主管的領導能力感到", "我對於直屬護理主管有能力凝聚團隊向心力感到", "我對於直屬護理主管能公平與合理的對待感到（如：升遷、考核等）", "我對於目前非護理專業的工作量感到", "我對於目前護理專業的工作量感到",
-  "我對於自己承擔目前護理工作的困難度感到", "整體來說，我對於目前工作的滿意度感到"
-];
-
-const retentionQuestions = [
-  { id: "ret-1", text: "我考慮要辭去目前的工作" },
-  { id: "ret-2", text: "我探聽其他非護理的工作機會" },
-  { id: "ret-3", text: "我探聽其他醫院的護理工作機會" },
-  { id: "ret-4", text: "我對目前的護理工作感到滿意，並願意繼續從事此項業務" },
-  { id: "ret-5", text: "我願意繼續從事目前專業領域的護理工作" }
-];
-
-// --- 獨立元件區 ---
-
-const EncouragementBanner = React.memo(({ title, message, icon: Icon = Sparkles }) => (
-  <div className="my-10 p-6 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl border border-yellow-200 flex flex-col md:flex-row items-center md:items-start shadow-sm animate-fadeIn">
-    <div className="bg-white p-3 rounded-full shadow-sm mb-3 md:mb-0 md:mr-5 shrink-0">
-      <Icon className="w-8 h-8 text-yellow-500" />
-    </div>
-    <div className="text-center md:text-left">
-      <h4 className="text-xl font-bold text-yellow-800 mb-2">{title}</h4>
-      <p className="text-yellow-700 leading-relaxed font-medium">{message}</p>
-    </div>
-  </div>
-));
-
-const QuestionItem = React.memo(({ 
-  id, 
-  text, 
-  subTitle, 
-  options, 
-  showReasonInput = true, 
-  numberPrefix, 
-  currentScore, 
-  reasonValue, 
-  onScoreChange, 
-  onReasonChange 
-}) => {
-  const isDissatisfied = showReasonInput && currentScore && currentScore <= 2 && currentScore !== 0;
-  const charCount = reasonValue ? reasonValue.length : 0;
-  const maxChars = 200;
-
-  return (
-    <div id={id} className={`mb-6 p-6 bg-white rounded-xl shadow-sm border ${currentScore === undefined ? 'border-red-200 bg-red-50/30' : 'border-emerald-100'} scroll-mt-32`}>
-      {subTitle && <h4 className="text-emerald-700 font-bold mb-2 text-lg">{subTitle}</h4>}
-      <div className="flex items-start mb-4">
-        {numberPrefix && <span className="bg-emerald-100 text-emerald-800 text-sm font-bold px-2 py-1 rounded mr-2 mt-1 shrink-0">{numberPrefix}</span>}
-        <p className="text-gray-800 font-medium text-lg leading-relaxed">
-          {text} <span className="text-red-500">*</span>
-        </p>
-      </div>
-      
-      <div className="flex flex-col md:flex-row gap-2 md:gap-4 w-full flex-wrap"> 
-        {options.map((opt) => (
-          <label key={opt.value} className="flex-1 relative cursor-pointer group min-w-[80px]">
-            <input
-              type="radio"
-              name={id} 
-              value={opt.value}
-              checked={currentScore === opt.value}
-              onChange={(e) => onScoreChange(id, parseInt(e.target.value))}
-              className="peer sr-only"
-            />
-            <div className={`
-              p-3 text-center rounded-lg border-2 transition-all
-              flex flex-col items-center justify-center h-full
-              peer-checked:bg-emerald-600 peer-checked:text-white peer-checked:border-emerald-600
-              hover:bg-emerald-50 hover:border-emerald-300 border-gray-200 text-gray-600
-            `}>
-              <span className="text-xl font-bold">{opt.value}</span>
-              <span className="text-xs">{opt.label}</span>
-            </div>
-          </label>
-        ))}
-      </div>
-
-      {isDissatisfied && (
-        <div className="mt-4 animate-fadeIn relative">
-          <label className="block text-sm font-bold text-red-600 mb-2 flex items-center">
-            <AlertTriangle className="w-4 h-4 mr-1" />
-            請簡述不滿意原因 (必填，最多200字)：
-          </label>
-          <textarea
-            className={`w-full p-3 border-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none resize-y min-h-[100px] ${!reasonValue ? 'border-red-400 bg-red-50' : 'border-emerald-200'}`}
-            rows="3"
-            maxLength={maxChars}
-            value={reasonValue || ''}
-            onChange={(e) => onReasonChange(id, e.target.value)}
-          />
-          <div className={`absolute bottom-3 right-3 text-xs font-medium pointer-events-none transition-colors
-            ${charCount > maxChars * 0.9 ? 'text-red-500' : 'text-gray-400'}
-          `}>
-            {charCount} / {maxChars}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}, (prevProps, nextProps) => {
-  return (
-    prevProps.currentScore === nextProps.currentScore &&
-    prevProps.reasonValue === nextProps.reasonValue &&
-    prevProps.id === nextProps.id
-  );
-});
-
-// --- 主元件 ---
-
-const SurveyForm = () => {
-  const [currentStep, setCurrentStep] = useState(0); 
-  const [consent, setConsent] = useState({ read: false, agree: false, understand: false });
-  // Removed researchCode
-  const [answers, setAnswers] = useState({});
-  const [reasons, setReasons] = useState({});
-  const [basicData, setBasicData] = useState({
-    location: '', level: '', department: '', gender: '', birthYear: '',
-    education: '', nLevel: '', totalTenure: '', currentTenure: '',
-    marriage: '', religion: '', shiftType: ''
-  });
-  const [emails, setEmails] = useState({ primary: '', secondary: '' });
-  const [showAbandonModal, setShowAbandonModal] = useState(false);
-  const [isAbandoned, setIsAbandoned] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // --- 邏輯處理 ---
-
-  const handleScoreChange = useCallback((questionId, value) => {
-    setAnswers(prev => ({ ...prev, [questionId]: parseInt(value) }));
-    if (parseInt(value) > 2 || parseInt(value) === 0) {
-      setReasons(prev => {
-        const newReasons = { ...prev };
-        delete newReasons[questionId];
-        return newReasons;
-      });
-    }
-  }, []);
-
-  const handleReasonChange = useCallback((questionId, text) => {
-    setReasons(prev => ({ ...prev, [questionId]: text }));
-  }, []);
-
-  const handleBasicDataChange = (field, value) => {
-    setBasicData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleEmailChange = (field, value) => {
-    setEmails(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleConsentChange = (key) => {
-    setConsent(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  // 驗證邏輯
-  const validateStep = () => {
-    if (currentStep === 0) {
-      return consent.read && consent.agree && consent.understand ? null : 'step-consent';
-    }
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>臺灣醫院護理師工作滿意度調查</title>
     
-    // Step indices have shifted because researchCode is gone
-    // 0: Consent, 1: Workplace, 2: Flexible, 3: Job, 4: Retention, 5: Basic, 6: Email
-
-    let currentIds = [];
-    if (currentStep === 1) {
-      workplaceSections.forEach(sec => sec.questions.forEach(q => currentIds.push(q.id)));
-    } else if (currentStep === 2) {
-      flexibleManpowerQuestions.forEach(q => currentIds.push(q.id));
-    } else if (currentStep === 3) {
-      jobSatisfactionQuestions.forEach((_, i) => currentIds.push(`js-${i+1}`));
-    } else if (currentStep === 4) {
-      retentionQuestions.forEach(q => currentIds.push(q.id));
-    }
-
-    if (currentStep >= 1 && currentStep <= 4) {
-      for (let id of currentIds) {
-        const score = answers[id];
-        if (score === undefined) return id; 
-        if (currentStep !== 4 && score <= 2 && score !== 0 && (!reasons[id] || reasons[id].trim() === "")) return id; 
-      }
-    }
-
-    if (currentStep === 5) {
-      const basicKeys = Object.keys(basicData);
-      for (let key of basicKeys) {
-        if (!basicData[key]) return key; 
-      }
-    }
-
-    if (currentStep === 6) {
-      if (!emails.primary || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emails.primary)) return 'email-primary';
-      if (emails.secondary && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emails.secondary)) return 'email-secondary';
-    }
-
-    return null; 
-  };
-
-  const getMissingCount = () => {
-     if (currentStep === 0) return (consent.read && consent.agree && consent.understand) ? 0 : 1;
-     if (currentStep === 6) return (!emails.primary || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emails.primary)) ? 1 : 0;
-     if (currentStep === 5) return Object.values(basicData).filter(v => !v).length;
-     
-     let currentIds = [];
-     if (currentStep === 1) workplaceSections.forEach(sec => sec.questions.forEach(q => currentIds.push(q.id)));
-     else if (currentStep === 2) flexibleManpowerQuestions.forEach(q => currentIds.push(q.id));
-     else if (currentStep === 3) jobSatisfactionQuestions.forEach((_, i) => currentIds.push(`js-${i+1}`));
-     else if (currentStep === 4) retentionQuestions.forEach(q => currentIds.push(q.id));
-
-     return currentIds.filter(id => {
-         const score = answers[id];
-         if(score === undefined) return true;
-         if(currentStep !== 4 && score <= 2 && score !== 0 && (!reasons[id] || reasons[id].trim() === "")) return true;
-         return false;
-     }).length;
-  }
-
-  // --- 導航功能 ---
-
-  const goNext = () => {
-    const errorId = validateStep();
-    if (!errorId) {
-      setCurrentStep(prev => prev + 1);
-      window.scrollTo(0, 0);
-    } else {
-      if (currentStep >= 1 && currentStep !== 6) {
-        const element = document.getElementById(errorId);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          if (currentStep === 5) {
-             const input = element.querySelector('input, select');
-             if (input) input.focus();
-          }
+    <!-- 1. 引入 Tailwind CSS (樣式庫) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. 設定 Import Map (讓瀏覽器知道去哪裡下載 React 和圖示庫) -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.294.0"
         }
-      } else if (currentStep === 6) {
-         const element = document.getElementById(errorId);
-         if(element) element.focus();
-         else alert("請輸入有效的常用 Email！");
-      } else {
-        alert("請完成所有必填欄位！");
-      }
     }
-  };
+    </script>
 
-  const goBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1);
-      window.scrollTo(0, 0);
-    }
-  };
-
-  const handleAbandonClick = () => setShowAbandonModal(true);
-  const handleContinueSurvey = () => setShowAbandonModal(false);
-  const handleConfirmAbandon = () => {
-    setShowAbandonModal(false);
-    setIsAbandoned(true);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const errorId = validateStep();
-    if (!errorId) {
-      setIsSubmitting(true);
-      
-      const formData = {
-        answers,
-        reasons,
-        basicData,
-        emails,
-        timestamp: new Date().toISOString()
-      };
-
-      try {
-        await fetch(GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(formData)
-        });
+    <!-- 3. 引入 Babel (讓瀏覽器可以執行 React/JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        /* 自定義捲軸樣式 */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #10b981; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #059669; }
         
-        setIsSubmitted(true);
-        window.scrollTo(0, 0);
-
-      } catch (error) {
-        console.error("Submission Error:", error);
-        alert("送出失敗，請檢查網路連線後重試，或聯繫管理員。");
-      } finally {
-        setIsSubmitting(false);
-      }
-    } else {
-      if (currentStep === 6) {
-         const element = document.getElementById(errorId);
-         if(element) {
-           element.focus();
-           alert("請輸入有效的常用 Email！");
-         }
-      }
-    }
-  };
-
-  // --- 渲染步驟內容 ---
-  const renderContent = () => {
-    if (isSubmitted) {
-      return (
-        <div className="bg-white p-10 rounded-3xl shadow-2xl text-center border-t-8 border-emerald-500 animate-fadeIn my-10">
-          <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-12 h-12 text-emerald-600" />
-          </div>
-          <h2 className="text-3xl font-bold text-gray-800 mb-4">問卷已成功送出！</h2>
-          <p className="text-gray-600 mb-8 leading-relaxed text-lg">
-            感謝您的寶貴意見。<br/>
-            電子禮券將寄送至您的信箱：<br/>
-            <span className="font-bold text-emerald-600">{emails.primary}</span>
-          </p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center"
-          >
-            <RefreshCw className="w-5 h-5 mr-2" /> 關閉視窗
-          </button>
-        </div>
-      );
-    }
-
-    switch (currentStep) {
-      case 0: // 填寫說明與同意書
-        return (
-          <div className="bg-white p-6 md:p-10 rounded-2xl shadow-lg border-t-8 border-emerald-600 animate-fadeIn mb-24">
-            <h2 className="text-2xl font-bold text-emerald-900 mb-6 flex items-center">
-              <FileText className="w-8 h-8 mr-3 text-emerald-600" />
-              護理師填寫說明與同意書
-            </h2>
-            
-            <div className="prose prose-emerald text-gray-700 leading-relaxed mb-8 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-              <p className="font-bold text-lg">親愛的護理同仁您好：</p>
-              <p>感謝您在繁忙的工作中撥空協助本次研究。本問卷旨在了解全國各層級醫院護理師的<span className="font-bold">職場現況、工作滿意度與組織文化氛圍</span>，以做為後續提升護理職場環境與政策倡議的重要參考。</p>
-              
-              <p className="font-bold mt-4">在您開始填答之前，請詳閱以下說明：</p>
-              <p>本研究由中華民國護理師護士公會全國聯合會（全聯會）依會員比例分層抽樣，了解護理師在不同地區（北、中、南、東）及不同層級醫院中的工作經驗、職場氛圍與滿意度，以支持後續護理政策與職場改善。</p>
-              <p className="mt-2">本問卷僅提供第一線直接照護病人的護理師填寫，已排除主管、管理師、個案管理師與非直接照護人員。以電子問卷方式進行，預計需花費 30–45 分鐘完成。您的填答可協助全國護理師共同發聲，促進改善職場文化與照護環境，並提供政策制定者可靠的實證資料。也許在填答過程中，可能因回顧職場經驗而感到些許情緒負荷，但整體風險極低。</p>
-
-              <h3 className="text-lg font-bold text-emerald-800 mt-6 mb-2">資料保密與使用方式</h3>
-              <ul className="list-disc pl-5 space-y-2">
-                <li>本問卷採完全匿名方式，問卷不會記錄您的姓名、員編、IP 位址或任何足以識別您的資訊。</li>
-                <li>所有資料僅作研究與統計分析之用。</li>
-                <li>研究結果將以整體或群組方式呈現，不會揭露任何個人資訊。</li>
-              </ul>
-
-              <h3 className="text-lg font-bold text-emerald-800 mt-6 mb-2">參與的自由與權益</h3>
-              <p>您的參與完全自願，可在任何時間選擇不參與或中止作答，並不會影響您的工作權益。</p>
-
-              <div className="bg-orange-50 border-l-4 border-orange-400 p-4 mt-6">
-                <p className="text-orange-800 font-bold">
-                  為感謝您對護理專業與環境改善的支持， 完成問卷後請留下您的電子信箱(請留個人信箱,非機構) ，我們將致贈電子禮券，聊表敬意。
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-              <p className="font-bold text-gray-800 mb-4 text-lg border-b pb-2">在開始作答前，請您閱讀並確認以下內容：</p>
-              <div className="space-y-4">
-                <label className="flex items-center space-x-3 cursor-pointer p-2 hover:bg-white rounded transition-colors">
-                  <div className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${consent.read ? 'bg-emerald-600 border-emerald-600' : 'border-gray-300 bg-white'}`}>
-                    {consent.read && <CheckSquare className="w-4 h-4 text-white" />}
-                  </div>
-                  <input type="checkbox" className="hidden" checked={consent.read} onChange={() => handleConsentChange('read')} />
-                  <span className="text-gray-700">我已閱讀並了解上述說明。</span>
-                </label>
-                
-                <label className="flex items-center space-x-3 cursor-pointer p-2 hover:bg-white rounded transition-colors">
-                  <div className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${consent.agree ? 'bg-emerald-600 border-emerald-600' : 'border-gray-300 bg-white'}`}>
-                    {consent.agree && <CheckSquare className="w-4 h-4 text-white" />}
-                  </div>
-                  <input type="checkbox" className="hidden" checked={consent.agree} onChange={() => handleConsentChange('agree')} />
-                  <span className="text-gray-700">我同意參加此研究並填寫本問卷。</span>
-                </label>
-                
-                <label className="flex items-center space-x-3 cursor-pointer p-2 hover:bg-white rounded transition-colors">
-                  <div className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${consent.understand ? 'bg-emerald-600 border-emerald-600' : 'border-gray-300 bg-white'}`}>
-                    {consent.understand && <CheckSquare className="w-4 h-4 text-white" />}
-                  </div>
-                  <input type="checkbox" className="hidden" checked={consent.understand} onChange={() => handleConsentChange('understand')} />
-                  <span className="text-gray-700">我了解本問卷匿名、資料僅供研究使用，且我可隨時停止作答。</span>
-                </label>
-              </div>
-            </div>
-
-            <div className="mt-8 text-sm text-gray-500 border-t pt-4">
-              <p className="font-bold text-emerald-700 mb-2">若您同意，請點選「開始作答」進入問卷。</p>
-              <p>若您對本研究有任何疑問，可與研究團隊聯繫：</p>
-              <p>中華民國護理師護士公會全國聯合會 — 職場研究小組</p>
-              <p>電話：(02)2550-2283 #14 | E-mail：lan@nurse.org.tw</p>
-            </div>
-            
-            <div className="mt-8">
-               <button 
-                onClick={goNext}
-                disabled={!validateStep() === null} 
-                className={`
-                  w-full py-4 rounded-xl font-bold text-xl flex items-center justify-center transition-all shadow-lg transform
-                  ${(consent.read && consent.agree && consent.understand)
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 hover:scale-[1.02] shadow-emerald-500/30 ring-2 ring-emerald-400/50' 
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'}
-                `}
-              >
-                開始作答 <ArrowRight className="ml-3 w-6 h-6" />
-              </button>
-            </div>
-          </div>
-        );
-
-      case 1: // 職場滿意度
-        return (
-          <div className="space-y-8 animate-fadeIn mb-24">
-             {workplaceSections.map((section, idx) => (
-              <React.Fragment key={`section-${idx}`}>
-                <div className="bg-white/60 rounded-xl p-2 md:p-4">
-                  <h3 className="text-xl font-bold text-emerald-800 mb-4 px-3 border-l-4 border-emerald-500">{section.title}</h3>
-                  {section.questions.map(q => {
-                    const isSpecialQuestion = ['q2-1', 'q2-2', 'q2-3', 'q2-4'].includes(q.id);
-                    const options = isSpecialQuestion ? satisfactionOptionsWithUnknown : satisfactionOptions;
-
-                    return (
-                      <QuestionItem 
-                        key={q.id} 
-                        id={q.id} 
-                        text={q.text} 
-                        options={options} 
-                        numberPrefix={q.id.replace('q', '')}
-                        currentScore={answers[q.id]}
-                        reasonValue={reasons[q.id]}
-                        onScoreChange={handleScoreChange}
-                        onReasonChange={handleReasonChange}
-                      />
-                    );
-                  })}
-                </div>
-                {idx === 2 && (
-                  <EncouragementBanner
-                    key="encourage-banner-3"
-                    title="深呼吸，休息一下 🌿"
-                    message="這一部分的題項較多，辛苦您了！回顧「工作負荷」與「薪資」可能需要一點心力，請喝口水喘口氣，您的真實回饋是我們爭取權益的重要依據。"
-                    icon={Coffee}
-                  />
-                )}
-              </React.Fragment>
-            ))}
-          </div>
-        );
-
-      case 2: // 彈性人力
-        return (
-          <div className="space-y-8 animate-fadeIn mb-24">
-            {flexibleManpowerQuestions.map((q, index) => (
-              <QuestionItem 
-                key={q.id} id={q.id} subTitle={q.title} text={q.text} 
-                options={satisfactionOptions} numberPrefix={`${index + 1}`}
-                currentScore={answers[q.id]}
-                reasonValue={reasons[q.id]}
-                onScoreChange={handleScoreChange}
-                onReasonChange={handleReasonChange}
-              />
-            ))}
-          </div>
-        );
-
-      case 3: // 工作滿意度
-        return (
-           <div className="space-y-8 animate-fadeIn mb-24">
-            {jobSatisfactionQuestions.map((text, index) => (
-              <React.Fragment key={`js-frag-${index}`}>
-                <QuestionItem 
-                  key={`js-${index+1}`} 
-                  id={`js-${index+1}`} 
-                  text={text} 
-                  options={satisfactionOptions} numberPrefix={`${index + 1}`}
-                  currentScore={answers[`js-${index+1}`]}
-                  reasonValue={reasons[`js-${index+1}`]}
-                  onScoreChange={handleScoreChange}
-                  onReasonChange={handleReasonChange}
-                />
-                {index === 14 && (
-                   <EncouragementBanner 
-                    key="encourage-banner"
-                    title="感謝您的堅持！👍"
-                    message="這部分的題目較多，您辛苦了！再堅持一下，我們非常重視您對工作各面向的真實感受，這將成為推動變革的重要依據。"
-                    icon={Sparkles}
-                  />
-                )}
-              </React.Fragment>
-            ))}
-          </div>
-        );
-
-      case 4: // 留任
-        return (
-          <div className="space-y-8 animate-fadeIn mb-24">
-            {retentionQuestions.map((q, index) => (
-              <QuestionItem 
-                key={q.id} id={q.id} text={q.text} 
-                options={frequencyOptions} showReasonInput={false} numberPrefix={`${index + 1}`}
-                currentScore={answers[q.id]}
-                reasonValue={reasons[q.id]}
-                onScoreChange={handleScoreChange}
-                onReasonChange={handleReasonChange}
-              />
-            ))}
-          </div>
-        );
-
-      case 5: // 基本資料
-        return (
-          <div className="bg-white rounded-2xl shadow-md overflow-hidden animate-fadeIn mb-24">
-            <div className="bg-emerald-700 p-4 flex items-center text-white">
-              <User className="w-6 h-6 mr-2" />
-              <h3 className="text-xl font-bold">基本資料 (全必填)</h3>
-            </div>
-            <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* 基本資料內容保持不變... (省略中間重複代碼以節省空間) */}
-              {/* 請確保這裡包含了完整的基本資料欄位，與上一版相同 */}
-              <div id="location" className="col-span-1 md:col-span-2 scroll-mt-32">
-                <label className="block font-bold mb-2 text-gray-700">機構縣市 <span className="text-red-500">*</span></label>
-                <select className="w-full p-3 border rounded-lg" value={basicData.location} onChange={e=>handleBasicDataChange('location', e.target.value)}>
-                  <option value="">請選擇</option>
-                  {['基隆市','新北市','台北市','桃園市','新竹縣市','苗栗縣','台中市','彰化縣','南投縣','嘉義縣市','雲林縣','台南市','高雄市','屏東縣市','宜蘭縣市','花蓮縣市','台東縣市','金門縣','澎湖縣'].map(c=><option key={c}>{c}</option>)}
-                </select>
-              </div>
-              {/* ... 其他欄位 (level, department, gender, birthYear, education, nLevel, totalTenure, currentTenure, marriage, religion, shiftType) ... */}
-               <div id="level" className="scroll-mt-32"><label className="block font-bold mb-2">機構層級 <span className="text-red-500">*</span></label>
-                <select className="w-full p-3 border rounded-lg" value={basicData.level} onChange={e=>handleBasicDataChange('level', e.target.value)}>
-                  <option value="">請選擇</option><option>醫學中心</option><option>區域醫院</option><option>地區醫院</option><option>精神專科醫院</option>
-                </select>
-              </div>
-              <div id="department" className="scroll-mt-32"><label className="block font-bold mb-2">工作科別 <span className="text-red-500">*</span></label>
-                <select className="w-full p-3 border rounded-lg" value={basicData.department} onChange={e=>handleBasicDataChange('department', e.target.value)}>
-                  <option value="">請選擇</option><option>內外科病房</option><option>急診</option><option>婦產科</option><option>兒科</option><option>加護單位</option><option>門診</option><option>手術室</option><option>精神科</option><option>其他</option>
-                </select>
-              </div>
-              <div><label className="block font-bold mb-2">性別 <span className="text-red-500">*</span></label>
-                 <select className="w-full p-3 border rounded-lg" value={basicData.gender} onChange={e=>handleBasicDataChange('gender', e.target.value)}>
-                  <option value="">請選擇</option><option>生理男</option><option>生理女</option><option>不便透露</option>
-                </select>
-              </div>
-              <div><label className="block font-bold mb-2">出生民國年 <span className="text-red-500">*</span></label>
-                <input type="number" className="w-full p-3 border rounded-lg" value={basicData.birthYear} onChange={e=>handleBasicDataChange('birthYear', e.target.value)} />
-              </div>
-              <div><label className="block font-bold mb-2">教育程度 <span className="text-red-500">*</span></label>
-                <select className="w-full p-3 border rounded-lg" value={basicData.education} onChange={e=>handleBasicDataChange('education', e.target.value)}>
-                  <option value="">請選擇</option><option>職校</option><option>專科</option><option>大學</option><option>研究所以上</option>
-                </select>
-              </div>
-              <div><label className="block font-bold mb-2">進階層級 <span className="text-red-500">*</span></label>
-                <select className="w-full p-3 border rounded-lg" value={basicData.nLevel} onChange={e=>handleBasicDataChange('nLevel', e.target.value)}>
-                  <option value="">請選擇</option><option>N</option><option>N1</option><option>N2</option><option>N3</option><option>N4</option>
-                </select>
-              </div>
-               <div><label className="block font-bold mb-2">護理總年資 <span className="text-red-500">*</span></label>
-                <input type="number" className="w-full p-3 border rounded-lg" value={basicData.totalTenure} onChange={e=>handleBasicDataChange('totalTenure', e.target.value)} />
-              </div>
-               <div><label className="block font-bold mb-2">目前機構年資 <span className="text-red-500">*</span></label>
-                <input type="number" className="w-full p-3 border rounded-lg" value={basicData.currentTenure} onChange={e=>handleBasicDataChange('currentTenure', e.target.value)} />
-              </div>
-               <div><label className="block font-bold mb-2">婚姻狀況 <span className="text-red-500">*</span></label>
-                <select className="w-full p-3 border rounded-lg" value={basicData.marriage} onChange={e=>handleBasicDataChange('marriage', e.target.value)}>
-                  <option value="">請選擇</option><option>單身</option><option>已婚</option><option>其他</option>
-                </select>
-              </div>
-               <div><label className="block font-bold mb-2">宗教信仰 <span className="text-red-500">*</span></label>
-                <select className="w-full p-3 border rounded-lg" value={basicData.religion} onChange={e=>handleBasicDataChange('religion', e.target.value)}>
-                  <option value="">請選擇</option><option>無信仰</option><option>佛教</option><option>道教</option><option>基督教</option><option>天主教</option><option>其他</option>
-                </select>
-              </div>
-              <div id="shiftType" className="col-span-1 md:col-span-2 scroll-mt-32">
-                <label className="block font-bold mb-2">班別型態 <span className="text-red-500">*</span></label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                   {['平均輪值三班', '白班為主', '小夜為主', '大夜為主'].map(opt => (
-                    <label key={opt} className={`cursor-pointer px-3 py-2 rounded-lg border text-center ${basicData.shiftType === opt ? 'bg-emerald-600 text-white' : 'bg-white'}`}>
-                      <input type="radio" className="hidden" checked={basicData.shiftType === opt} onChange={()=>handleBasicDataChange('shiftType', opt)} />
-                      {opt}
-                    </label>
-                   ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 6: // Email 收集 (New Step)
-        return (
-          <div className="bg-white rounded-2xl shadow-md overflow-hidden animate-fadeIn mb-24">
-            <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 text-white text-center">
-              <h3 className="text-2xl font-bold mb-2">🎉 感謝您對本研究的支持</h3>
-              <p className="opacity-90">我們將寄送電子禮券聊表感謝之意</p>
-            </div>
-            
-            <div className="p-8 md:p-12 space-y-8">
-              <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 text-orange-800 text-sm leading-relaxed">
-                <p className="font-bold mb-1">⚠️ 重要提醒：</p>
-                <p>請輸入您 <span className="font-bold underline">個人信箱</span>，避免使用機構信箱並留意我們寄送的電子禮卷。</p>
-              </div>
-
-              <div className="space-y-6">
-                <div id="email-primary">
-                  <label className="block text-lg font-bold text-gray-700 mb-2 flex items-center">
-                    <Mail className="w-5 h-5 mr-2 text-emerald-600" />
-                    常用 E-mail (必填) <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <input 
-                    type="email" 
-                    placeholder="example@gmail.com" 
-                    className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 outline-none text-lg"
-                    value={emails.primary}
-                    onChange={(e) => handleEmailChange('primary', e.target.value)}
-                  />
-                </div>
-
-                <div id="email-secondary">
-                  <label className="block text-lg font-bold text-gray-700 mb-2 flex items-center">
-                    <Mail className="w-5 h-5 mr-2 text-gray-400" />
-                    備用 E-mail
-                  </label>
-                  <input 
-                    type="email" 
-                    placeholder="optional@email.com" 
-                    className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-gray-400 focus:ring-4 focus:ring-gray-100 outline-none text-lg"
-                    value={emails.secondary}
-                    onChange={(e) => handleEmailChange('secondary', e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="border-t pt-6 mt-8">
-                <h4 className="font-bold text-gray-700 mb-4 flex items-center">
-                  <Phone className="w-5 h-5 mr-2" />
-                  研究小組聯絡資訊
-                </h4>
-                <div className="text-sm text-gray-500 space-y-1 pl-7">
-                  <p>中華民國護理師護士公會全國聯合會 — 職場研究小組</p>
-                  <p>電話：(02)2550-2283 #14</p>
-                  <p>E-mail：lan@nurse.org.tw</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
-      default: return null;
-    }
-  };
-
-  const isStepValid = validateStep() === null;
-  const missingCount = getMissingCount();
-
-  // --- 放棄後的畫面 ---
-  if (isAbandoned) {
-    return (
-      <div className="min-h-screen bg-emerald-50 flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full text-center border-t-8 border-yellow-400 animate-fadeIn">
-          <div className="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Heart className="w-12 h-12 text-yellow-500 fill-current" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">您的意見真的很重要！</h2>
-          <p className="text-gray-600 mb-8 leading-relaxed text-lg">
-            有空要再回來填答喔！<br/>
-            我們期待您的寶貴建議。
-          </p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center"
-          >
-            <RefreshCw className="w-5 h-5 mr-2" /> 回到首頁
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 若已提交，顯示全螢幕感謝
-  if (isSubmitted) {
-    return renderContent(); 
-  }
-
-  return (
-    <div className="min-h-screen bg-emerald-50 font-sans text-gray-800 pb-0">
-      {/* Header */}
-      <header className="bg-gradient-to-r from-emerald-800 to-teal-700 text-white shadow-lg sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-white/20 p-2 rounded-lg"><ClipboardCheck className="w-6 h-6" /></div>
-            <div>
-              <h1 className="text-lg md:text-2xl font-bold">臺灣醫院護理師工作滿意度調查</h1>
-              <p className="text-xs opacity-80">Step {currentStep} / {stepsConfig.length - 1}</p>
-            </div>
-          </div>
-          {/* Removed researchCode display */}
-        </div>
-        {/* Progress Bar */}
-        <div className="h-2 bg-emerald-900/30 w-full">
-          <div className="h-full bg-yellow-400 transition-all duration-500" style={{ width: `${(currentStep / (stepsConfig.length - 1)) * 100}%` }}></div>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-4 py-8">
+        /* 動畫設定 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn { animation: fadeIn 0.5s ease-out forwards; }
         
-        {/* Step Header */}
-        {currentStep > 0 && currentStep < stepsConfig.length && (
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-emerald-900">{stepsConfig[currentStep].title}</h2>
-          </div>
-        )}
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .animate-bounce { animation: bounce 1s infinite; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="bg-emerald-50 text-gray-800">
+    <div id="root"></div>
 
-        {/* Content Area */}
-        {renderContent()}
+    <!-- 4. 主要程式碼 -->
+    <script type="text/babel" data-type="module">
+        import React, { useState, useCallback } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { ClipboardCheck, Heart, User, ArrowRight, ArrowLeft, AlertTriangle, CheckCircle, Lock, FileText, CheckSquare, XCircle, Sparkles, Coffee, HelpCircle, RefreshCw, MousePointerClick, Mail, Phone } from 'lucide-react';
 
-      </main>
+        // --- 設定後端 API 網址 ---
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwSW54OZlDBTj2LiF0i03s3laPU0dWvcdLicQWtKHeDw15TbOCRrUcWc6V2-HOnP7S0/exec";
 
-      {/* Persistent Navigation Footer */}
-      {!isSubmitted && currentStep !== 0 && ( // Step 0 有自己的按鈕
-        <footer className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] border-t border-emerald-100 z-50 p-4">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            
-            {/* 左側：放棄按鈕 */}
-            <button 
-              onClick={handleAbandonClick}
-              className="flex items-center px-4 py-3 text-red-500 font-bold hover:bg-red-50 rounded-xl transition-colors text-sm md:text-base"
-            >
-              <XCircle className="w-5 h-5 md:mr-2" />
-              <span className="hidden md:inline">放棄填答</span>
-              <span className="md:hidden">放棄</span>
-            </button>
+        // --- 靜態資料 ---
+        const satisfactionOptions = [
+            { value: 5, label: "非常滿意" }, { value: 4, label: "滿意" }, { value: 3, label: "普通" },
+            { value: 2, label: "不滿意" }, { value: 1, label: "非常不滿意" }
+        ];
 
-            {/* 右側：導航按鈕群組 */}
-            <div className="flex space-x-3 items-center">
-              
-              {/* 提示文字：僅在驗證未通過時顯示 */}
-              <div className="flex flex-col items-end">
-                 {!isStepValid && (
-                  <div className="hidden md:flex items-center text-orange-600 text-sm font-bold mb-1 animate-bounce w-full justify-end">
-                    「點我」跳至未填題項！
-                  </div>
-                )}
-                <div className="flex space-x-3">
-                  {/* 上一頁：第一頁不顯示 */}
-                  {currentStep > 0 && (
-                    <button 
-                      onClick={goBack}
-                      className="flex items-center px-5 py-3 border-2 border-emerald-600 text-emerald-600 font-bold rounded-xl hover:bg-emerald-50 transition-all"
-                    >
-                      <ArrowLeft className="w-5 h-5 md:mr-2" />
-                      <span className="hidden md:inline">上一頁</span>
-                    </button>
-                  )}
+        const satisfactionOptionsWithUnknown = [
+            { value: 5, label: "非常滿意" }, { value: 4, label: "滿意" }, { value: 3, label: "普通" },
+            { value: 2, label: "不滿意" }, { value: 1, label: "非常不滿意" }, { value: 0, label: "不清楚" }
+        ];
 
-                  {/* 下一頁 / 送出 */}
-                  <button 
-                    onClick={currentStep === 6 ? handleSubmit : goNext}
-                    className={`
-                      flex items-center px-6 py-3 rounded-xl font-bold text-white shadow-lg transition-all min-w-[140px] justify-center relative
-                      ${isStepValid 
-                        ? 'bg-emerald-600 hover:bg-emerald-700 hover:scale-105' 
-                        : 'bg-gray-400 hover:bg-gray-500'}
-                    `}
-                  >
-                    {!isStepValid ? (
-                      <span className="text-sm">尚有 {missingCount} 題未填</span>
-                    ) : currentStep === 6 ? (
-                      <>確認送出 <CheckCircle className="ml-2 w-5 h-5" /></>
-                    ) : (
-                      <>下一頁 <ArrowRight className="ml-2 w-5 h-5" /></>
+        const frequencyOptions = [
+            { value: 1, label: "從未" }, { value: 2, label: "很少" }, { value: 3, label: "有時" },
+            { value: 4, label: "經常" }, { value: 5, label: "總是" }
+        ];
+
+        const stepsConfig = [
+            { id: 'step-consent', title: '填寫說明與同意書', type: 'consent' }, // 0
+            { id: 'step-1', title: '第一部分：護理職場滿意程度', type: 'questions' }, // 1
+            { id: 'step-2', title: '第一部分(續)：彈性護理人力資源管理', type: 'questions' }, // 2
+            { id: 'step-3', title: '第二部分：工作滿意度', type: 'questions' }, // 3
+            { id: 'step-4', title: '第二部分(續)：留任意願', type: 'questions' }, // 4
+            { id: 'step-5', title: '基本資料', type: 'basic' }, // 5
+            { id: 'step-finish', title: '領取回饋與完成', type: 'finish' } // 6
+        ];
+
+        const workplaceSections = [
+            {
+                title: "1. 安全執業環境",
+                questions: [
+                    { id: "q1-1", text: "具安全執業環境設置標準及維護標準，並落實執行及持續改善。" },
+                    { id: "q1-2", text: "有足夠的經費確保安全執業環境，並落實執行。" },
+                    { id: "q1-3", text: "具員工健康檢查制度，並落實後續追蹤及管理。" },
+                    { id: "q1-4", text: "具職業傷病預防、處置及通報機制，並落實檢討改善。" },
+                    { id: "q1-5", text: "具職業災害補償機制，並落實執行。" },
+                    { id: "q1-6", text: "落實感控動線規劃及風險區域管制。" },
+                    { id: "q1-7", text: "具降低生物性危害(如：體液、血液與傳染性醫療廢棄物等)的防護設備及措施。" },
+                    { id: "q1-8", text: "具降低物理性危害(如：電器、滅菌鍋、氧氣槽、輻射、溫度、噪音等)的防護設備及措施。" },
+                    { id: "q1-9", text: "具降低化學性危害(如：高危藥、有機物質等)的防護設備及措施。" },
+                    { id: "q1-10", text: "確實執行執業環境危害評估與改善。" },
+                    { id: "q1-11", text: "具符合人因工程的基本設施(如：桌椅、工作台、工作車、燈光、空間等)。" },
+                    { id: "q1-12", text: "具預防人因工程危害之設備(如：移位滑板、電動床、電動磅秤床等)。" },
+                    { id: "q1-13", text: "落實人因工程危害的預防與管理。" },
+                    { id: "q1-14", text: "訂有職場暴力(如：霸凌、性侵害等)與性騷擾危害防治政策及標準作業流程。" },
+                    { id: "q1-15", text: "具職場暴力(如：霸凌、性侵害等)與性騷擾通報機制並協處合宜。" },
+                    { id: "q1-16", text: "提供職場暴力(如：霸凌、性侵害等)與性騷擾受害員工的支援與輔導。" },
+                ]
+            },
+            {
+                title: "2. 人力素質",
+                questions: [
+                    { id: "q2-1", text: "具護理師證照佔率。" },
+                    { id: "q2-2", text: "具N2(含)以上佔率。" },
+                    { id: "q2-3", text: "具本院臨床工作年資2年(含)以上佔率。" },
+                    { id: "q2-4", text: "具碩士學位之護理長(含)以上主管佔率。" },
+                ]
+            },
+            {
+                title: "3. 工作負荷與薪資福利",
+                questions: [
+                    { id: "q3-1", text: "合宜的三班護病比(一般急性病房)。" },
+                    { id: "q3-2", text: "有機動護理人力調配機制。" },
+                    { id: "q3-3", text: "有輔助人力，維持合理工作負荷。" },
+                    { id: "q3-4", text: "具市場行情的薪資(含績效獎金)。" },
+                    { id: "q3-5", text: "具市場行情的夜班費。" },
+                    { id: "q3-6", text: "具護理專業進階或升等制度，並隨能力進階或升等職級調整薪資/獎金。" },
+                    { id: "q3-7", text: "具多元激勵措施,定期評估激勵制度，加以改進和提供合適與即時性酬賞。" },
+                    { id: "q3-8", text: "具優渥的福利方案(如：保險、傷殘、房租、教育、房貸、制服、洗衣、伙食、交通、急難救助、育嬰、托兒、托老等)。" },
+                ]
+            },
+            {
+                title: "4. 專業分工與團隊合作",
+                questions: [
+                    { id: "q4-1", text: "護理部門對專業分工之決策具有影響力。" },
+                    { id: "q4-2", text: "團隊專業分工明確且確實執行。" },
+                    { id: "q4-3", text: "非護理專業工作由專責單位負責監督與管理。" },
+                    { id: "q4-4", text: "跨領域團隊具相互尊重的文化。" },
+                    { id: "q4-5", text: "跨領域團隊具良好的溝通及合作機制。" },
+                    { id: "q4-6", text: "護理團隊單位內與單位間有互助合作機制。" },
+                ]
+            },
+            {
+                title: "5. 工作簡化",
+                questions: [
+                    { id: "q5-1", text: "護理主管積極推動工作簡化。" },
+                    { id: "q5-2", text: "護理人員落實執行工作簡化。" },
+                    { id: "q5-3", text: "工作簡化有具體成效評值。" },
+                    { id: "q5-4", text: "鼓勵參與工作簡化，並有獎勵措施。" },
+                    { id: "q5-5", text: "工作簡化能獲得跨領域團隊的支持與協助。" },
+                ]
+            },
+            {
+                title: "6. 資訊化",
+                questions: [
+                    { id: "q6-1", text: "病房具足夠的資訊科技硬體設備(如：E化護理工作車、床邊電腦等)。" },
+                    { id: "q6-2", text: "具適當的病人安全維護系統。" },
+                    { id: "q6-3", text: "具符合護理人員需求的臨床護理資訊系統。" },
+                    { id: "q6-4", text: "具數位化學習及管理系統。" },
+                    { id: "q6-5", text: "具適當之護理資訊管理功能。" },
+                ]
+            },
+            {
+                title: "7. 人才培育與專業發展",
+                questions: [
+                    { id: "q7-1", text: "護理部門對人才培育有具體之方向及策略。" },
+                    { id: "q7-2", text: "醫院提供充足資源，進行護理人才培育，並有具體成效。" },
+                    { id: "q7-3", text: "具臨床專業能力進階制度，以及促進專業能力機制，並定期檢視與評值。" },
+                    { id: "q7-4", text: "協助及激勵護理人員專業職涯規劃，並有具體成果。" },
+                    { id: "q7-5", text: "展現多元化護理專業角色與功能(如：個管師、安寧共照師、資訊護理師等)。" },
+                    { id: "q7-6", text: "具體呈現護理實務之專業發展與創新實例。" },
+                    { id: "q7-7", text: "病人及家屬肯定護理專業的價值。" },
+                    { id: "q7-8", text: "醫療團隊及院內同仁肯定護理人員專業貢獻。" },
+                    { id: "q7-9", text: "護理專業發展能與國際接軌，並有具體策略。" },
+                ]
+            },
+            {
+                title: "8. 支持與關懷",
+                questions: [
+                    { id: "q8-1", text: "醫院內重大會議均有護理部主管參與(如：預算、績效、獎懲、人力資源、品質管理等會議)。" },
+                    { id: "q8-2", text: "重大決策採納護理部主管意見。" },
+                    { id: "q8-3", text: "支持護理部門並提供所需資源。" },
+                    { id: "q8-4", text: "尊重護理部門之人事決策。" },
+                    { id: "q8-5", text: "定期與不定期獎勵護理人員良好的工作表現，並公開表揚。" },
+                    { id: "q8-6", text: "有專責單位支持及協助護理人員處理各種困境(如：異常事件、客訴、醫療爭議等)。" },
+                    { id: "q8-7", text: "護理部門之會議及政策制定有基層護理人員參與。" },
+                    { id: "q8-8", text: "護理人員有多元管道表達意見，並獲得有效處理。" },
+                    { id: "q8-9", text: "具有彈性的排班原則，符合多元需求。" },
+                    { id: "q8-10", text: "關懷護理人員之工作和生活需求。" },
+                    { id: "q8-11", text: "提供護理人員身心紓壓的支持團體或相關活動與措施。" },
+                ]
+            },
+            {
+                title: "9. 整體滿意度",
+                questions: [
+                    { id: "q1-overall", text: "整體而言，您對目前護理職場環境的滿意度。" }
+                ]
+            }
+        ];
+
+        const flexibleManpowerQuestions = [
+            { id: "fm-1", title: "職能彈性", text: "您對醫院利用職能變化，賦予人力運用的彈性（如：教育訓練、交叉訓練、工作輪調、自主性等）的滿意情形。" },
+            { id: "fm-2", title: "數量彈性", text: "您對醫院在面對照護需求變動時，能及時調整人力數量（如：浮動人力庫、工作分享制等）的滿意情形。" },
+            { id: "fm-3", title: "區隔彈性", text: "您對醫院配置核心護理人力，並適度聘用周邊人力（如：護佐）且給予合適職稱薪酬的滿意情形。" },
+            { id: "fm-4", title: "時間彈性", text: "您對醫院利用改變工作時數或時段（如：排班考量偏好、彈性排班、固定班別、部分工時）的滿意情形。" },
+            { id: "fm-5", title: "薪資彈性", text: "您對醫院採用個人化、多樣性及激勵性薪給制度（如：績效獎金、利潤分享）的滿意情形。" },
+            { id: "fm-6", title: "領導彈性", text: "您對醫院促進團隊合作、溝通、授權及營造良好氣氛的滿意情形。" },
+            { id: "fm-overall", title: "整體", text: "整體而言，您對目前彈性護理人力資源管理的滿意度。" },
+        ];
+
+        const jobSatisfactionQuestions = [
+            "我對於機構提供的個人防護設施及配備感到", "我對於各項作業的資訊化感到", "我對於工作環境的安全性感到", "我對於機構提供醫療設備的品項及數量感到", "我對於機構提供病人的照護模式感到",
+            "我對於機構支持護理人員進修感到", "我對於機構提供的專業訓練感到", "我對於服務機構的退休制度感到", "我對於職位的升遷機會感到", "我對於現有的薪資報酬感到",
+            "我對於能自我掌握工作的狀況感到", "我對於自己處理危機的能力感到", "我對於工作的專業自主感到", "我對於自己有參與各項重要決策的機會感到", "我對於自己的工作能力能獲得同儕的認同與肯定感到",
+            "我對於自己的工作能力能獲得主管的認同與肯定感到", "我對於能從工作上獲得成就感感到", "我對於在工作上能得到學習的機會感到", "我對於與其他醫事人員的互動情形感到", "我對於與醫師共同合作情形感到",
+            "我對於與護理人員共同合作情形感到", "我對於與行政人員的互動情形感到", "我對於我的工作受到跨團隊成員的相互尊重感到", "我對於與護理同儕的互動情形感到", "我對於直屬護理主管的支持與關懷感到",
+            "我對於直屬護理主管的領導能力感到", "我對於直屬護理主管有能力凝聚團隊向心力感到", "我對於直屬護理主管能公平與合理的對待感到（如：升遷、考核等）", "我對於目前非護理專業的工作量感到", "我對於目前護理專業的工作量感到",
+            "我對於自己承擔目前護理工作的困難度感到", "整體來說，我對於目前工作的滿意度感到"
+        ];
+
+        const retentionQuestions = [
+            { id: "ret-1", text: "我考慮要辭去目前的工作" },
+            { id: "ret-2", text: "我探聽其他非護理的工作機會" },
+            { id: "ret-3", text: "我探聽其他醫院的護理工作機會" },
+            { id: "ret-4", text: "我對目前的護理工作感到滿意，並願意繼續從事此項業務" },
+            { id: "ret-5", text: "我願意繼續從事目前專業領域的護理工作" }
+        ];
+
+        const EncouragementBanner = React.memo(({ title, message, icon: Icon = Sparkles }) => (
+            <div className="my-10 p-6 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl border border-yellow-200 flex flex-col md:flex-row items-center md:items-start shadow-sm animate-fadeIn">
+                <div className="bg-white p-3 rounded-full shadow-sm mb-3 md:mb-0 md:mr-5 shrink-0">
+                    <Icon className="w-8 h-8 text-yellow-500" />
+                </div>
+                <div className="text-center md:text-left">
+                    <h4 className="text-xl font-bold text-yellow-800 mb-2">{title}</h4>
+                    <p className="text-yellow-700 leading-relaxed font-medium">{message}</p>
+                </div>
+            </div>
+        ));
+
+        const QuestionItem = React.memo(({ 
+            id, 
+            text, 
+            subTitle, 
+            options, 
+            showReasonInput = true, 
+            numberPrefix, 
+            currentScore, 
+            reasonValue, 
+            onScoreChange, 
+            onReasonChange 
+        }) => {
+            const isDissatisfied = showReasonInput && currentScore && currentScore <= 2 && currentScore !== 0;
+            const charCount = reasonValue ? reasonValue.length : 0;
+            const maxChars = 200;
+
+            return (
+                <div id={id} className={`mb-6 p-6 bg-white rounded-xl shadow-sm border ${currentScore === undefined ? 'border-red-200 bg-red-50/30' : 'border-emerald-100'} scroll-mt-32`}>
+                    {subTitle && <h4 className="text-emerald-700 font-bold mb-2 text-lg">{subTitle}</h4>}
+                    <div className="flex items-start mb-4">
+                        {numberPrefix && <span className="bg-emerald-100 text-emerald-800 text-sm font-bold px-2 py-1 rounded mr-2 mt-1 shrink-0">{numberPrefix}</span>}
+                        <p className="text-gray-800 font-medium text-lg leading-relaxed">
+                            {text} <span className="text-red-500">*</span>
+                        </p>
+                    </div>
+                    
+                    <div className="flex flex-col md:flex-row gap-2 md:gap-4 w-full flex-wrap"> 
+                        {options.map((opt) => (
+                            <label key={opt.value} className="flex-1 relative cursor-pointer group min-w-[80px]">
+                                <input
+                                    type="radio"
+                                    name={id} 
+                                    value={opt.value}
+                                    checked={currentScore === opt.value}
+                                    onChange={(e) => onScoreChange(id, parseInt(e.target.value))}
+                                    className="peer sr-only"
+                                />
+                                <div className={`
+                                    p-3 text-center rounded-lg border-2 transition-all
+                                    flex flex-col items-center justify-center h-full
+                                    peer-checked:bg-emerald-600 peer-checked:text-white peer-checked:border-emerald-600
+                                    hover:bg-emerald-50 hover:border-emerald-300 border-gray-200 text-gray-600
+                                `}>
+                                    <span className="text-xl font-bold">{opt.value}</span>
+                                    <span className="text-xs">{opt.label}</span>
+                                </div>
+                            </label>
+                        ))}
+                    </div>
+
+                    {isDissatisfied && (
+                        <div className="mt-4 animate-fadeIn relative">
+                            <label className="block text-sm font-bold text-red-600 mb-2 flex items-center">
+                                <AlertTriangle className="w-4 h-4 mr-1" />
+                                請簡述不滿意原因 (必填，最多200字)：
+                            </label>
+                            <textarea
+                                className={`w-full p-3 border-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none resize-y min-h-[100px] ${!reasonValue ? 'border-red-400 bg-red-50' : 'border-emerald-200'}`}
+                                rows="3"
+                                maxLength={maxChars}
+                                value={reasonValue || ''}
+                                onChange={(e) => onReasonChange(id, e.target.value)}
+                            />
+                            <div className={`absolute bottom-3 right-3 text-xs font-medium pointer-events-none transition-colors
+                                ${charCount > maxChars * 0.9 ? 'text-red-500' : 'text-gray-400'}
+                            `}>
+                                {charCount} / {maxChars}
+                            </div>
+                        </div>
                     )}
-                  </button>
                 </div>
-                 {/* 手機版提示 */}
-                {!isStepValid && (
-                  <div className="md:hidden flex items-center text-orange-600 text-xs font-bold mt-1 animate-pulse">
-                    ↑ 點擊跳至未填題項
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </footer>
-      )}
+            );
+        }, (prevProps, nextProps) => {
+            return (
+                prevProps.currentScore === nextProps.currentScore &&
+                prevProps.reasonValue === nextProps.reasonValue &&
+                prevProps.id === nextProps.id
+            );
+        });
 
-      {/* 自定義確認視窗 (Modal) */}
-      {showAbandonModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={() => setShowAbandonModal(false)}></div>
-          <div className="bg-white rounded-2xl p-6 md:p-8 max-w-sm w-full shadow-2xl z-10 transform scale-100 transition-transform">
-            <div className="flex flex-col items-center text-center">
-              <div className="bg-orange-100 p-4 rounded-full mb-4">
-                <HelpCircle className="w-10 h-10 text-orange-500" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">好不容易填到這...<br/>您確定不繼續填答嗎?</h3>
-              <p className="text-gray-500 text-sm mb-6 leading-relaxed">
-                放棄後資料將 <span className="font-bold text-red-500">無法保存</span> 喔！<br/>
-                您的意見對改善護理環境非常重要。
-              </p>
-              
-              <div className="flex flex-col gap-3 w-full">
-                <button 
-                  onClick={handleContinueSurvey}
-                  className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-lg hover:bg-emerald-700 hover:scale-[1.02] transition-all flex items-center justify-center"
-                >
-                  <ArrowRight className="w-5 h-5 mr-2" /> 繼續填答 (推薦)
-                </button>
-                <button 
-                  onClick={handleConfirmAbandon}
-                  className="w-full py-3 border-2 border-gray-300 text-gray-500 font-bold rounded-xl hover:bg-gray-50 hover:text-gray-700 transition-all"
-                >
-                  下次重填
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+        // --- 主元件 ---
 
-export default SurveyForm;
+        const SurveyForm = () => {
+            const [currentStep, setCurrentStep] = useState(0); 
+            const [consent, setConsent] = useState({ read: false, agree: false, understand: false });
+            const [answers, setAnswers] = useState({});
+            const [reasons, setReasons] = useState({});
+            const [basicData, setBasicData] = useState({
+                location: '', level: '', department: '', gender: '', birthYear: '',
+                education: '', nLevel: '', totalTenure: '', currentTenure: '',
+                marriage: '', religion: '', shiftType: ''
+            });
+            const [emails, setEmails] = useState({ primary: '', secondary: '' });
+            const [showAbandonModal, setShowAbandonModal] = useState(false);
+            const [isAbandoned, setIsAbandoned] = useState(false);
+            const [isSubmitted, setIsSubmitted] = useState(false);
+            const [isSubmitting, setIsSubmitting] = useState(false);
+
+            const handleScoreChange = useCallback((questionId, value) => {
+                setAnswers(prev => ({ ...prev, [questionId]: parseInt(value) }));
+                if (parseInt(value) > 2 || parseInt(value) === 0) {
+                    setReasons(prev => {
+                        const newReasons = { ...prev };
+                        delete newReasons[questionId];
+                        return newReasons;
+                    });
+                }
+            }, []);
+
+            const handleReasonChange = useCallback((questionId, text) => {
+                setReasons(prev => ({ ...prev, [questionId]: text }));
+            }, []);
+
+            const handleBasicDataChange = (field, value) => {
+                setBasicData(prev => ({ ...prev, [field]: value }));
+            };
+
+            const handleEmailChange = (field, value) => {
+                setEmails(prev => ({ ...prev, [field]: value }));
+            };
+
+            const handleConsentChange = (key) => {
+                setConsent(prev => ({ ...prev, [key]: !prev[key] }));
+            };
+
+            const validateStep = () => {
+                if (currentStep === 0) {
+                    return consent.read && consent.agree && consent.understand ? null : 'step-consent';
+                }
+                
+                let currentIds = [];
+                if (currentStep === 1) {
+                    workplaceSections.forEach(sec => sec.questions.forEach(q => currentIds.push(q.id)));
+                } else if (currentStep === 2) {
+                    flexibleManpowerQuestions.forEach(q => currentIds.push(q.id));
+                } else if (currentStep === 3) {
+                    jobSatisfactionQuestions.forEach((_, i) => currentIds.push(`js-${i+1}`));
+                } else if (currentStep === 4) {
+                    retentionQuestions.forEach(q => currentIds.push(q.id));
+                }
+
+                if (currentStep >= 1 && currentStep <= 4) {
+                    for (let id of currentIds) {
+                        const score = answers[id];
+                        if (score === undefined) return id; 
+                        if (currentStep !== 4 && score <= 2 && score !== 0 && (!reasons[id] || reasons[id].trim() === "")) return id; 
+                    }
+                }
+
+                if (currentStep === 5) {
+                    const basicKeys = Object.keys(basicData);
+                    for (let key of basicKeys) {
+                        if (!basicData[key]) return key; 
+                    }
+                }
+
+                if (currentStep === 6) {
+                    if (!emails.primary || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emails.primary)) return 'email-primary';
+                    if (emails.secondary && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emails.secondary)) return 'email-secondary';
+                }
+
+                return null; 
+            };
+
+            const getMissingCount = () => {
+                if (currentStep === 0) return (consent.read && consent.agree && consent.understand) ? 0 : 1;
+                if (currentStep === 6) return (!emails.primary || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emails.primary)) ? 1 : 0;
+                if (currentStep === 5) return Object.values(basicData).filter(v => !v).length;
+                
+                let currentIds = [];
+                if (currentStep === 1) workplaceSections.forEach(sec => sec.questions.forEach(q => currentIds.push(q.id)));
+                else if (currentStep === 2) flexibleManpowerQuestions.forEach(q => currentIds.push(q.id));
+                else if (currentStep === 3) jobSatisfactionQuestions.forEach((_, i) => currentIds.push(`js-${i+1}`));
+                else if (currentStep === 4) retentionQuestions.forEach(q => currentIds.push(q.id));
+
+                return currentIds.filter(id => {
+                    const score = answers[id];
+                    if(score === undefined) return true;
+                    if(currentStep !== 4 && score <= 2 && score !== 0 && (!reasons[id] || reasons[id].trim() === "")) return true;
+                    return false;
+                }).length;
+            }
+
+            // 修正: 在外部計算 isStepValid，避免 ReferenceError
+            const isStepValid = validateStep() === null;
+            const missingCount = getMissingCount();
+
+            const goNext = () => {
+                const errorId = validateStep();
+                if (!errorId) {
+                    setCurrentStep(prev => prev + 1);
+                    window.scrollTo(0, 0);
+                } else {
+                    if (currentStep >= 1 && currentStep !== 6) {
+                        const element = document.getElementById(errorId);
+                        if (element) {
+                            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            if (currentStep === 5) {
+                                const input = element.querySelector('input, select');
+                                if (input) input.focus();
+                            }
+                        }
+                    } else if (currentStep === 6) {
+                        const element = document.getElementById(errorId);
+                        if(element) element.focus();
+                        else alert("請輸入有效的常用 Email！");
+                    } else {
+                        alert("請完成所有必填欄位！");
+                    }
+                }
+            };
+
+            const goBack = () => {
+                if (currentStep > 0) {
+                    setCurrentStep(prev => prev - 1);
+                    window.scrollTo(0, 0);
+                }
+            };
+
+            const handleAbandonClick = () => setShowAbandonModal(true);
+            const handleContinueSurvey = () => setShowAbandonModal(false);
+            const handleConfirmAbandon = () => {
+                setShowAbandonModal(false);
+                setIsAbandoned(true);
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                const errorId = validateStep();
+                if (!errorId) {
+                    setIsSubmitting(true);
+                    
+                    const formData = {
+                        answers,
+                        reasons,
+                        basicData,
+                        emails,
+                        timestamp: new Date().toISOString()
+                    };
+
+                    try {
+                        await fetch(GOOGLE_SCRIPT_URL, {
+                            method: 'POST',
+                            mode: 'no-cors',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(formData)
+                        });
+                        
+                        setIsSubmitted(true);
+                        window.scrollTo(0, 0);
+
+                    } catch (error) {
+                        console.error("Submission Error:", error);
+                        alert("送出失敗，請檢查網路連線後重試，或聯繫管理員。");
+                    } finally {
+                        setIsSubmitting(false);
+                    }
+                } else {
+                    if (currentStep === 6) {
+                        const element = document.getElementById(errorId);
+                        if(element) {
+                            element.focus();
+                            alert("請輸入有效的常用 Email！");
+                        }
+                    }
+                }
+            };
+
+            if (isSubmitted) {
+                return (
+                    <div className="bg-white p-10 rounded-3xl shadow-2xl text-center border-t-8 border-emerald-500 animate-fadeIn my-10 max-w-lg mx-auto">
+                        <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <CheckCircle className="w-12 h-12 text-emerald-600" />
+                        </div>
+                        <h2 className="text-3xl font-bold text-gray-800 mb-4">問卷已成功送出！</h2>
+                        <p className="text-gray-600 mb-8 leading-relaxed text-lg">
+                            感謝您的寶貴意見。<br/>
+                            電子禮券將寄送至您的信箱：<br/>
+                            <span className="font-bold text-emerald-600">{emails.primary}</span>
+                        </p>
+                        <button 
+                            onClick={() => window.location.reload()} 
+                            className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center"
+                        >
+                            <RefreshCw className="w-5 h-5 mr-2" /> 關閉視窗
+                        </button>
+                    </div>
+                );
+            }
+
+            // 頁面內容渲染邏輯
+            let content = null;
+            if (currentStep === 0) {
+                 content = (
+                    <div className="bg-white p-6 md:p-10 rounded-2xl shadow-lg border-t-8 border-emerald-600 animate-fadeIn mb-24">
+                         <h2 className="text-2xl font-bold text-emerald-900 mb-6 flex items-center">
+                            <FileText className="w-8 h-8 mr-3 text-emerald-600" />
+                            護理師填寫說明與同意書
+                        </h2>
+                        <div className="prose prose-emerald text-gray-700 leading-relaxed mb-8 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                            <p className="font-bold text-lg">親愛的護理同仁您好：</p>
+                            <p>感謝您在繁忙的工作中撥空協助本次研究。本問卷旨在了解全國各層級醫院護理師的<span className="font-bold">職場現況、工作滿意度與組織文化氛圍</span>，以做為後續提升護理職場環境與政策倡議的重要參考。</p>
+                            <p className="font-bold mt-4">在您開始填答之前，請詳閱以下說明：</p>
+                            <p>本研究由中華民國護理師護士公會全國聯合會（全聯會）依會員比例分層抽樣，了解護理師在不同地區（北、中、南、東）及不同層級醫院中的工作經驗、職場氛圍與滿意度，以支持後續護理政策與職場改善。</p>
+                            <p className="mt-2">本問卷僅提供第一線直接照護病人的護理師填寫，已排除主管、管理師、個案管理師與非直接照護人員。以電子問卷方式進行，預計需花費 30–45 分鐘完成。您的填答可協助全國護理師共同發聲，促進改善職場文化與照護環境，並提供政策制定者可靠的實證資料。也許在填答過程中，可能因回顧職場經驗而感到些許情緒負荷，但整體風險極低。</p>
+                            <h3 className="text-lg font-bold text-emerald-800 mt-6 mb-2">資料保密與使用方式</h3>
+                            <ul className="list-disc pl-5 space-y-2">
+                                <li>本問卷採完全匿名方式，問卷不會記錄您的姓名、員編、IP 位址或任何足以識別您的資訊。</li>
+                                <li>所有資料僅作研究與統計分析之用。</li>
+                                <li>研究結果將以整體或群組方式呈現，不會揭露任何個人資訊。</li>
+                            </ul>
+                            <h3 className="text-lg font-bold text-emerald-800 mt-6 mb-2">參與的自由與權益</h3>
+                            <p>您的參與完全自願，可在任何時間選擇不參與或中止作答，並不會影響您的工作權益。</p>
+                            <div className="bg-orange-50 border-l-4 border-orange-400 p-4 mt-6">
+                                <p className="text-orange-800 font-bold">
+                                    為感謝您對護理專業與環境改善的支持， 完成問卷後請留下您的電子信箱(請留個人信箱,非機構) ，我們將致贈電子禮券，聊表敬意。
+                                </p>
+                            </div>
+                        </div>
+                        <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                            <p className="font-bold text-gray-800 mb-4 text-lg border-b pb-2">在開始作答前，請您閱讀並確認以下內容：</p>
+                            <div className="space-y-4">
+                                <label className="flex items-center space-x-3 cursor-pointer p-2 hover:bg-white rounded transition-colors">
+                                    <div className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${consent.read ? 'bg-emerald-600 border-emerald-600' : 'border-gray-300 bg-white'}`}>
+                                        {consent.read && <CheckSquare className="w-4 h-4 text-white" />}
+                                    </div>
+                                    <input type="checkbox" className="hidden" checked={consent.read} onChange={() => handleConsentChange('read')} />
+                                    <span className="text-gray-700">我已閱讀並了解上述說明。</span>
+                                </label>
+                                <label className="flex items-center space-x-3 cursor-pointer p-2 hover:bg-white rounded transition-colors">
+                                    <div className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${consent.agree ? 'bg-emerald-600 border-emerald-600' : 'border-gray-300 bg-white'}`}>
+                                        {consent.agree && <CheckSquare className="w-4 h-4 text-white" />}
+                                    </div>
+                                    <input type="checkbox" className="hidden" checked={consent.agree} onChange={() => handleConsentChange('agree')} />
+                                    <span className="text-gray-700">我同意參加此研究並填寫本問卷。</span>
+                                </label>
+                                <label className="flex items-center space-x-3 cursor-pointer p-2 hover:bg-white rounded transition-colors">
+                                    <div className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${consent.understand ? 'bg-emerald-600 border-emerald-600' : 'border-gray-300 bg-white'}`}>
+                                        {consent.understand && <CheckSquare className="w-4 h-4 text-white" />}
+                                    </div>
+                                    <input type="checkbox" className="hidden" checked={consent.understand} onChange={() => handleConsentChange('understand')} />
+                                    <span className="text-gray-700">我了解本問卷匿名、資料僅供研究使用，且我可隨時停止作答。</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div className="mt-8 text-sm text-gray-500 border-t pt-4">
+                             <p className="font-bold text-emerald-700 mb-2">若您同意，請點選「開始作答」進入問卷。</p>
+                            <p>若您對本研究有任何疑問，可與研究團隊聯繫：</p>
+                            <p>中華民國護理師護士公會全國聯合會 — 職場研究小組</p>
+                            <p>電話：(02)2550-2283 #14 | E-mail：lan@nurse.org.tw</p>
+                        </div>
+                        <div className="mt-8">
+                            <button 
+                                onClick={goNext}
+                                disabled={!isStepValid} 
+                                className={`
+                                w-full py-4 rounded-xl font-bold text-xl flex items-center justify-center transition-all shadow-lg transform
+                                ${(consent.read && consent.agree && consent.understand)
+                                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 hover:scale-[1.02] shadow-emerald-500/30 ring-2 ring-emerald-400/50' 
+                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'}
+                                `}
+                            >
+                                開始作答 <ArrowRight className="ml-3 w-6 h-6" />
+                            </button>
+                        </div>
+                    </div>
+                );
+            } else if (currentStep === 1) {
+                content = (
+                    <div className="space-y-8 animate-fadeIn mb-24">
+                        {workplaceSections.map((section, idx) => (
+                            <React.Fragment key={`section-${idx}`}>
+                                <div className="bg-white/60 rounded-xl p-2 md:p-4">
+                                    <h3 className="text-xl font-bold text-emerald-800 mb-4 px-3 border-l-4 border-emerald-500">{section.title}</h3>
+                                    {section.questions.map(q => {
+                                        const isSpecialQuestion = ['q2-1', 'q2-2', 'q2-3', 'q2-4'].includes(q.id);
+                                        const options = isSpecialQuestion ? satisfactionOptionsWithUnknown : satisfactionOptions;
+                                        return (
+                                            <QuestionItem 
+                                                key={q.id} id={q.id} text={q.text} options={options} numberPrefix={q.id.replace('q', '')}
+                                                currentScore={answers[q.id]} reasonValue={reasons[q.id]}
+                                                onScoreChange={handleScoreChange} onReasonChange={handleReasonChange}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                                {idx === 2 && (
+                                    <EncouragementBanner
+                                        key="encourage-banner-3"
+                                        title="深呼吸，休息一下 🌿"
+                                        message="這一部分的題項較多，辛苦您了！回顧「工作負荷」與「薪資」可能需要一點心力，請喝口水喘口氣，您的真實回饋是我們爭取權益的重要依據。"
+                                        icon={Coffee}
+                                    />
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </div>
+                );
+            } else if (currentStep === 2) {
+                content = (
+                    <div className="space-y-8 animate-fadeIn mb-24">
+                        {flexibleManpowerQuestions.map((q, index) => (
+                            <QuestionItem 
+                                key={q.id} id={q.id} subTitle={q.title} text={q.text} 
+                                options={satisfactionOptions} numberPrefix={`${index + 1}`}
+                                currentScore={answers[q.id]} reasonValue={reasons[q.id]}
+                                onScoreChange={handleScoreChange} onReasonChange={handleReasonChange}
+                            />
+                        ))}
+                    </div>
+                );
+            } else if (currentStep === 3) {
+                content = (
+                    <div className="space-y-8 animate-fadeIn mb-24">
+                        {jobSatisfactionQuestions.map((text, index) => (
+                            <React.Fragment key={`js-frag-${index}`}>
+                                <QuestionItem 
+                                    key={`js-${index+1}`} id={`js-${index+1}`} text={text} 
+                                    options={satisfactionOptions} numberPrefix={`${index + 1}`}
+                                    currentScore={answers[`js-${index+1}`]} reasonValue={reasons[`js-${index+1}`]}
+                                    onScoreChange={handleScoreChange} onReasonChange={handleReasonChange}
+                                />
+                                {index === 14 && (
+                                    <EncouragementBanner 
+                                        key="encourage-banner"
+                                        title="感謝您的堅持！👍"
+                                        message="這部分的題目較多，您辛苦了！再堅持一下，我們非常重視您對工作各面向的真實感受，這將成為推動變革的重要依據。"
+                                        icon={Sparkles}
+                                    />
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </div>
+                );
+            } else if (currentStep === 4) {
+                content = (
+                    <div className="space-y-8 animate-fadeIn mb-24">
+                        {retentionQuestions.map((q, index) => (
+                            <QuestionItem 
+                                key={q.id} id={q.id} text={q.text} 
+                                options={frequencyOptions} showReasonInput={false} numberPrefix={`${index + 1}`}
+                                currentScore={answers[q.id]} reasonValue={reasons[q.id]}
+                                onScoreChange={handleScoreChange} onReasonChange={handleReasonChange}
+                            />
+                        ))}
+                    </div>
+                );
+            } else if (currentStep === 5) {
+                content = (
+                    <div className="bg-white rounded-2xl shadow-md overflow-hidden animate-fadeIn mb-24">
+                        <div className="bg-emerald-700 p-4 flex items-center text-white">
+                            <User className="w-6 h-6 mr-2" />
+                            <h3 className="text-xl font-bold">基本資料 (全必填)</h3>
+                        </div>
+                        <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                             <div id="location" className="col-span-1 md:col-span-2 scroll-mt-32">
+                                <label className="block font-bold mb-2 text-gray-700">機構縣市 <span className="text-red-500">*</span></label>
+                                <select className="w-full p-3 border rounded-lg" value={basicData.location} onChange={e=>handleBasicDataChange('location', e.target.value)}>
+                                <option value="">請選擇</option>
+                                {['基隆市','新北市','台北市','桃園市','新竹縣市','苗栗縣','台中市','彰化縣','南投縣','嘉義縣市','雲林縣','台南市','高雄市','屏東縣市','宜蘭縣市','花蓮縣市','台東縣市','金門縣','澎湖縣'].map(c=><option key={c}>{c}</option>)}
+                                </select>
+                            </div>
+                            <div id="level" className="scroll-mt-32"><label className="block font-bold mb-2">機構層級 <span className="text-red-500">*</span></label>
+                                <select className="w-full p-3 border rounded-lg" value={basicData.level} onChange={e=>handleBasicDataChange('level', e.target.value)}>
+                                <option value="">請選擇</option><option>醫學中心</option><option>區域醫院</option><option>地區醫院</option><option>精神專科醫院</option>
+                                </select>
+                            </div>
+                            <div id="department" className="scroll-mt-32"><label className="block font-bold mb-2">工作科別 <span className="text-red-500">*</span></label>
+                                <select className="w-full p-3 border rounded-lg" value={basicData.department} onChange={e=>handleBasicDataChange('department', e.target.value)}>
+                                <option value="">請選擇</option><option>內外科病房</option><option>急診</option><option>婦產科</option><option>兒科</option><option>加護單位</option><option>門診</option><option>手術室</option><option>精神科</option><option>其他</option>
+                                </select>
+                            </div>
+                            <div id="gender" className="scroll-mt-32"><label className="block font-bold mb-2">性別 <span className="text-red-500">*</span></label>
+                                <select className="w-full p-3 border rounded-lg" value={basicData.gender} onChange={e=>handleBasicDataChange('gender', e.target.value)}>
+                                <option value="">請選擇</option><option>生理男</option><option>生理女</option><option>不便透露</option>
+                                </select>
+                            </div>
+                            <div id="birthYear" className="scroll-mt-32"><label className="block font-bold mb-2">出生民國年 <span className="text-red-500">*</span></label>
+                                <input type="number" className="w-full p-3 border rounded-lg" value={basicData.birthYear} onChange={e=>handleBasicDataChange('birthYear', e.target.value)} />
+                            </div>
+                            <div id="education" className="scroll-mt-32"><label className="block font-bold mb-2">教育程度 <span className="text-red-500">*</span></label>
+                                <select className="w-full p-3 border rounded-lg" value={basicData.education} onChange={e=>handleBasicDataChange('education', e.target.value)}>
+                                <option value="">請選擇</option><option>職校</option><option>專科</option><option>大學</option><option>研究所以上</option>
+                                </select>
+                            </div>
+                            <div id="nLevel" className="scroll-mt-32"><label className="block font-bold mb-2">進階層級 <span className="text-red-500">*</span></label>
+                                <select className="w-full p-3 border rounded-lg" value={basicData.nLevel} onChange={e=>handleBasicDataChange('nLevel', e.target.value)}>
+                                <option value="">請選擇</option><option>N</option><option>N1</option><option>N2</option><option>N3</option><option>N4</option>
+                                </select>
+                            </div>
+                            <div id="totalTenure" className="scroll-mt-32"><label className="block font-bold mb-2">護理總年資 <span className="text-red-500">*</span></label>
+                                <input type="number" className="w-full p-3 border rounded-lg" value={basicData.totalTenure} onChange={e=>handleBasicDataChange('totalTenure', e.target.value)} />
+                            </div>
+                            <div id="currentTenure" className="scroll-mt-32"><label className="block font-bold mb-2">目前機構年資 <span className="text-red-500">*</span></label>
+                                <input type="number" className="w-full p-3 border rounded-lg" value={basicData.currentTenure} onChange={e=>handleBasicDataChange('currentTenure', e.target.value)} />
+                            </div>
+                            <div id="marriage" className="scroll-mt-32"><label className="block font-bold mb-2">婚姻狀況 <span className="text-red-500">*</span></label>
+                                <select className="w-full p-3 border rounded-lg" value={basicData.marriage} onChange={e=>handleBasicDataChange('marriage', e.target.value)}>
+                                <option value="">請選擇</option><option>單身</option><option>已婚</option><option>其他</option>
+                                </select>
+                            </div>
+                            <div id="religion" className="scroll-mt-32"><label className="block font-bold mb-2">宗教信仰 <span className="text-red-500">*</span></label>
+                                <select className="w-full p-3 border rounded-lg" value={basicData.religion} onChange={e=>handleBasicDataChange('religion', e.target.value)}>
+                                <option value="">請選擇</option><option>無信仰</option><option>佛教</option><option>道教</option><option>基督教</option><option>天主教</option><option>其他</option>
+                                </select>
+                            </div>
+                            <div id="shiftType" className="col-span-1 md:col-span-2 scroll-mt-32">
+                                <label className="block font-bold mb-2">班別型態 <span className="text-red-500">*</span></label>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                {['平均輪值三班', '白班為主', '小夜為主', '大夜為主'].map(opt => (
+                                    <label key={opt} className={`cursor-pointer px-3 py-2 rounded-lg border text-center ${basicData.shiftType === opt ? 'bg-emerald-600 text-white' : 'bg-white'}`}>
+                                    <input type="radio" className="hidden" checked={basicData.shiftType === opt} onChange={()=>handleBasicDataChange('shiftType', opt)} />
+                                    {opt}
+                                    </label>
+                                ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            } else if (currentStep === 6) {
+                content = (
+                    <div className="bg-white rounded-2xl shadow-md overflow-hidden animate-fadeIn mb-24">
+                        <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 text-white text-center">
+                            <h3 className="text-2xl font-bold mb-2">🎉 感謝您對本研究的支持</h3>
+                            <p className="opacity-90">我們將寄送電子禮券聊表感謝之意</p>
+                        </div>
+                        <div className="p-8 md:p-12 space-y-8">
+                            <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 text-orange-800 text-sm leading-relaxed">
+                                <p className="font-bold mb-1">⚠️ 重要提醒：</p>
+                                <p>請輸入您 <span className="font-bold underline">個人信箱</span>，避免使用機構信箱並留意我們寄送的電子禮卷。</p>
+                            </div>
+                            <div className="space-y-6">
+                                <div id="email-primary">
+                                    <label className="block text-lg font-bold text-gray-700 mb-2 flex items-center">
+                                        <Mail className="w-5 h-5 mr-2 text-emerald-600" />
+                                        常用 E-mail (必填) <span className="text-red-500 ml-1">*</span>
+                                    </label>
+                                    <input 
+                                        type="email" 
+                                        placeholder="example@gmail.com" 
+                                        className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 outline-none text-lg"
+                                        value={emails.primary}
+                                        onChange={(e) => handleEmailChange('primary', e.target.value)}
+                                    />
+                                </div>
+                                <div id="email-secondary">
+                                    <label className="block text-lg font-bold text-gray-700 mb-2 flex items-center">
+                                        <Mail className="w-5 h-5 mr-2 text-gray-400" />
+                                        備用 E-mail
+                                    </label>
+                                    <input 
+                                        type="email" 
+                                        placeholder="optional@email.com" 
+                                        className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-gray-400 focus:ring-4 focus:ring-gray-100 outline-none text-lg"
+                                        value={emails.secondary}
+                                        onChange={(e) => handleEmailChange('secondary', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="border-t pt-6 mt-8">
+                                <h4 className="font-bold text-gray-700 mb-4 flex items-center">
+                                    <Phone className="w-5 h-5 mr-2" />
+                                    研究小組聯絡資訊
+                                </h4>
+                                <div className="text-sm text-gray-500 space-y-1 pl-7">
+                                    <p>中華民國護理師護士公會全國聯合會 — 職場研究小組</p>
+                                    <p>電話：(02)2550-2283 #14</p>
+                                    <p>E-mail：lan@nurse.org.tw</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (isAbandoned) {
+                return (
+                    <div className="min-h-screen bg-emerald-50 flex items-center justify-center p-4">
+                        <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full text-center border-t-8 border-yellow-400 animate-fadeIn">
+                        <div className="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <Heart className="w-12 h-12 text-yellow-500 fill-current" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-800 mb-4">您的意見真的很重要！</h2>
+                        <p className="text-gray-600 mb-8 leading-relaxed text-lg">
+                            有空要再回來填答喔！<br/>
+                            我們期待您的寶貴建議。
+                        </p>
+                        <button 
+                            onClick={() => window.location.reload()} 
+                            className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center"
+                        >
+                            <RefreshCw className="w-5 h-5 mr-2" /> 回到首頁
+                        </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-emerald-50 font-sans text-gray-800 pb-0">
+                    <header className="bg-gradient-to-r from-emerald-800 to-teal-700 text-white shadow-lg sticky top-0 z-50">
+                        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                            <div className="bg-white/20 p-2 rounded-lg"><ClipboardCheck className="w-6 h-6" /></div>
+                            <div>
+                            <h1 className="text-lg md:text-2xl font-bold">臺灣醫院護理師工作滿意度調查</h1>
+                            <p className="text-xs opacity-80">Step {currentStep} / {stepsConfig.length - 1}</p>
+                            </div>
+                        </div>
+                        </div>
+                        <div className="h-2 bg-emerald-900/30 w-full">
+                        <div className="h-full bg-yellow-400 transition-all duration-500" style={{ width: `${(currentStep / (stepsConfig.length - 1)) * 100}%` }}></div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-4xl mx-auto px-4 py-8">
+                        {currentStep > 0 && currentStep < stepsConfig.length && (
+                        <div className="mb-6 flex items-center justify-between">
+                            <h2 className="text-2xl font-bold text-emerald-900">{stepsConfig[currentStep].title}</h2>
+                        </div>
+                        )}
+                        {content}
+                    </main>
+
+                    {!isSubmitted && currentStep !== 0 && (
+                        <footer className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] border-t border-emerald-100 z-50 p-4">
+                        <div className="max-w-4xl mx-auto flex items-center justify-between">
+                            <button 
+                            onClick={handleAbandonClick}
+                            className="flex items-center px-4 py-3 text-red-500 font-bold hover:bg-red-50 rounded-xl transition-colors text-sm md:text-base"
+                            >
+                            <XCircle className="w-5 h-5 md:mr-2" />
+                            <span className="hidden md:inline">放棄填答</span>
+                            <span className="md:hidden">放棄</span>
+                            </button>
+
+                            <div className="flex space-x-3 items-center">
+                                <div className="flex flex-col items-end">
+                                    {(!isStepValid && !isSubmitting) && (
+                                        <div className="hidden md:flex items-center text-orange-600 text-sm font-bold mb-1 animate-bounce w-full justify-end">
+                                            「點我」跳至未填題項！
+                                        </div>
+                                    )}
+                                    <div className="flex space-x-3">
+                                        {currentStep > 0 && (
+                                            <button 
+                                            onClick={goBack}
+                                            className="flex items-center px-5 py-3 border-2 border-emerald-600 text-emerald-600 font-bold rounded-xl hover:bg-emerald-50 transition-all"
+                                            >
+                                            <ArrowLeft className="w-5 h-5 md:mr-2" />
+                                            <span className="hidden md:inline">上一頁</span>
+                                            </button>
+                                        )}
+
+                                        <button 
+                                            onClick={currentStep === 6 ? handleSubmit : goNext}
+                                            className={`
+                                            flex items-center px-6 py-3 rounded-xl font-bold text-white shadow-lg transition-all min-w-[140px] justify-center relative
+                                            ${isStepValid 
+                                                ? 'bg-emerald-600 hover:bg-emerald-700 hover:scale-105' 
+                                                : 'bg-gray-400 hover:bg-gray-500'}
+                                            `}
+                                        >
+                                            {!isStepValid ? (
+                                                <span className="text-sm">尚有 {missingCount} 題未填</span>
+                                            ) : currentStep === 6 ? (
+                                                isSubmitting ? "送出中..." : <>確認送出 <CheckCircle className="ml-2 w-5 h-5" /></>
+                                            ) : (
+                                                <>下一頁 <ArrowRight className="ml-2 w-5 h-5" /></>
+                                            )}
+                                        </button>
+                                    </div>
+                                    {!isStepValid && (
+                                        <div className="md:hidden flex items-center text-orange-600 text-xs font-bold mt-1 animate-pulse">
+                                            ↑ 點擊跳至未填題項
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        </footer>
+                    )}
+
+                    {showAbandonModal && (
+                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={() => setShowAbandonModal(false)}></div>
+                        <div className="bg-white rounded-2xl p-6 md:p-8 max-w-sm w-full shadow-2xl z-10 transform scale-100 transition-transform">
+                            <div className="flex flex-col items-center text-center">
+                            <div className="bg-orange-100 p-4 rounded-full mb-4">
+                                <HelpCircle className="w-10 h-10 text-orange-500" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">好不容易填到這...<br/>您確定不繼續填答嗎?</h3>
+                            <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                                放棄後資料將 <span className="font-bold text-red-500">無法保存</span> 喔！<br/>
+                                您的意見對改善護理環境非常重要。
+                            </p>
+                            
+                            <div className="flex flex-col gap-3 w-full">
+                                <button 
+                                onClick={handleContinueSurvey}
+                                className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-lg hover:bg-emerald-700 hover:scale-[1.02] transition-all flex items-center justify-center"
+                                >
+                                <ArrowRight className="w-5 h-5 mr-2" /> 繼續填答 (推薦)
+                                </button>
+                                <button 
+                                onClick={handleConfirmAbandon}
+                                className="w-full py-3 border-2 border-gray-300 text-gray-500 font-bold rounded-xl hover:bg-gray-50 hover:text-gray-700 transition-all"
+                                >
+                                下次重填
+                                </button>
+                            </div>
+                            </div>
+                        </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<SurveyForm />);
+    </script>
+</body>
+</html>
